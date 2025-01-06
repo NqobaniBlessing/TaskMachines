@@ -1,22 +1,21 @@
 ﻿using System.Collections.Concurrent;
 using System.Diagnostics;
 
-namespace TaskMachines.ThreadPools;
+namespace TaskMachines.Common.Async.ThreadPools;
 
 public static class MyThreadPool
 {
     private static readonly BlockingCollection<(Func<Task>, ExecutionContext?)> GlobalQueue = [];
     private static readonly CancellationTokenSource CancellationTokenSource = new();
     private static readonly CancellationToken CancellationToken = CancellationTokenSource.Token;
-    private static readonly ThreadLocal<ConcurrentStack<(Func<Task>, ExecutionContext?)>> LocalQueues =
-        new(() => new ConcurrentStack<(Func<Task>, ExecutionContext?)>());
+    private static readonly ConcurrentDictionary<int, ConcurrentStack<(Func<Task>, ExecutionContext?)>> LocalQueueMap = [];
     private static readonly CountdownEvent Countdown = new(1);  // Start with 1 to prevent early completion
 
     static MyThreadPool()
     {
         for (var i = 0; i < Environment.ProcessorCount; i++)
         {
-            var thread = new Thread(Start)
+            var thread = new Thread(() => _ = Start())
             {
                 IsBackground = true
             };
@@ -25,14 +24,15 @@ public static class MyThreadPool
         }
     }
 
-    private static async void Start()
+    private static async Task Start()
     {
         try
         {
             while (!CancellationToken.IsCancellationRequested)
             {
-                if (LocalQueues.Value != null && LocalQueues.Value.TryPop(out var localWorkItem))
+                if (LocalQueueMap.TryGetValue(Environment.CurrentManagedThreadId, out var localQueue))
                 {
+                    localQueue.TryPop(out var localWorkItem);
                     await ExecuteTask(localWorkItem);
                 }
                 else if (GlobalQueue.TryTake(out var globalWorkItem, Timeout.Infinite, CancellationToken))
@@ -117,17 +117,39 @@ public static class MyThreadPool
     {
         var context = ExecutionContext.Capture();
         Countdown.AddCount();
-        LocalQueues.Value?.Push((async () =>
+
+        if (!LocalQueueMap.TryGetValue(Environment.CurrentManagedThreadId, 
+                out var localQueue))
         {
-            try
+            localQueue ??= new ConcurrentStack<(Func<Task>, ExecutionContext?)>();
+            localQueue.Push((async () =>
             {
-                await workItem();
-            }
-            finally
+                try
+                {
+                    await workItem();
+                }
+                finally
+                {
+                    Countdown.Signal();
+                }
+            }, context));
+
+            LocalQueueMap[Environment.CurrentManagedThreadId] = localQueue;
+        }
+        else
+        {
+            LocalQueueMap[Environment.CurrentManagedThreadId].Push((async () =>
             {
-                Countdown.Signal();
-            }
-        }, context));
+                try
+                {
+                    await workItem();
+                }
+                finally
+                {
+                    Countdown.Signal();
+                }
+            }, context));
+        }
 
         return Task.CompletedTask;
     }
@@ -154,7 +176,7 @@ public static class MyThreadPool
     {
         GlobalQueue.CompleteAdding();
         Countdown.Signal();
-        Countdown.Wait();
+        // Countdown.Wait();
         CancellationTokenSource.Cancel();
     }
 }

@@ -1,4 +1,5 @@
-﻿using TaskMachines.TaskSchedulers;
+﻿using TaskMachines.Common.Async.Locks;
+using TaskMachines.Common.Async.TaskSchedulers;
 
 //var singleThreadScheduler = new SingleThreadTaskScheduler();
 //var singleThreadSyncContext = singleThreadScheduler.CreateSynchronizationContext();
@@ -10,13 +11,13 @@
 //    // Queue tasks to single-threaded scheduler
 //    await singleThreadFactory.StartNew(() =>
 //    {
-//        Console.WriteLine("Single-threaded task executed, Thread Id: {0}", Environment.CurrentManagedThreadId);
+//        Console.WriteLine("Single-threaded task executed, Thread ID: {0}", Environment.CurrentManagedThreadId);
 //    });
 
 //    SynchronizationContext.Current!.Post(
 //        _ =>
 //        {
-//            Console.WriteLine("Task posted to SynchronizationContext executed, Thread Id: {0}",
+//            Console.WriteLine("Task posted to SynchronizationContext executed, Thread ID: {0}",
 //                Environment.CurrentManagedThreadId);
 //        }, null);
 //}
@@ -48,29 +49,41 @@
 //}
 
 var scheduler = new MultiThreadTaskScheduler();
+var asyncLock = new AsyncLock();
 
 scheduler.QueueTask(() => Console.WriteLine("Hello from synchronous task, Thread Id: {0}", Environment.CurrentManagedThreadId));
 
 // Queue some asynchronous work
 await scheduler.QueueTask(async () =>
 {
-    await Task.Delay(1000);
+    using (await asyncLock.LockAsync())
+    {
+        Console.WriteLine("Long-running task...");
+        await Task.Delay(4000);
+    }
+
     Console.WriteLine("Hello from asynchronous task");
 });
 
 // Queue a task that returns a result
 var result = await scheduler.QueueTask(async () =>
 {
-    await Task.Delay(1000);
+    using (await asyncLock.LockAsync())
+    {
+        Console.WriteLine("Short task...");
+        await Task.Delay(1000);
+    }
+
     return "Result from asynchronous task with result";
 });
+
 Console.WriteLine(result);
 
 // Queue a nested task
 await scheduler.QueueTask(async () =>
 {
     await scheduler.QueueTask(() => Task.Run(() => Console.WriteLine("Hello from nested task")));
-    Console.WriteLine("Hello from parent task");
+Console.WriteLine("Hello from parent task");
 });
 
 scheduler.Shutdown();

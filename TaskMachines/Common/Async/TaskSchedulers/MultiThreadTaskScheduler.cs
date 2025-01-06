@@ -1,6 +1,6 @@
-﻿using TaskMachines.ThreadPools;
+﻿using TaskMachines.Common.Async.ThreadPools;
 
-namespace TaskMachines.TaskSchedulers;
+namespace TaskMachines.Common.Async.TaskSchedulers;
 
 public class MultiThreadTaskScheduler : TaskScheduler
 {
