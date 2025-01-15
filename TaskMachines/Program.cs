@@ -1,52 +1,54 @@
 ﻿using TaskMachines.Common.Async.Locks;
 using TaskMachines.Common.Async.TaskSchedulers;
+using TaskMachines.TaskSchedulers;
 
-//var singleThreadScheduler = new SingleThreadTaskScheduler();
-//var singleThreadSyncContext = singleThreadScheduler.CreateSynchronizationContext();
-//SynchronizationContext.SetSynchronizationContext(singleThreadSyncContext);
-//var singleThreadFactory = new TaskFactory(singleThreadScheduler);
+var singleThreadScheduler = new SingleThreadTaskScheduler();
+var singleThreadSyncContext = singleThreadScheduler.CreateSynchronizationContext();
+SynchronizationContext.SetSynchronizationContext(singleThreadSyncContext);
+var singleThreadFactory = new TaskFactory(singleThreadScheduler);
 
-//for (var i = 0; i < 3; i++)
-//{
-//    // Queue tasks to single-threaded scheduler
-//    await singleThreadFactory.StartNew(() =>
-//    {
-//        Console.WriteLine("Single-threaded task executed, Thread ID: {0}", Environment.CurrentManagedThreadId);
-//    });
+for (var i = 0; i < 3; i++)
+{
+    // Queue tasks to single-threaded scheduler
+    await singleThreadFactory.StartNew(() =>
+    {
+        Console.WriteLine("Single-threaded task executed, Thread ID: {0}", Environment.CurrentManagedThreadId);
+    });
 
-//    SynchronizationContext.Current!.Post(
-//        _ =>
-//        {
-//            Console.WriteLine("Task posted to SynchronizationContext executed, Thread ID: {0}",
-//                Environment.CurrentManagedThreadId);
-//        }, null);
-//}
+    SynchronizationContext.Current?.Post(
+        _ =>
+        {
+            Console.WriteLine("Task posted to SynchronizationContext executed, Thread ID: {0}",
+                Environment.CurrentManagedThreadId);
+        }, null);
+}
 
-//// Multithreaded scheduler and synchronization context
-//var multiThreadScheduler = new DynamicThreadTaskScheduler(minThreads: 10, maxThreads: 20);
-//    var multiThreadSyncContext = multiThreadScheduler.CreateSynchronizationContext();
-//    SynchronizationContext.SetSynchronizationContext(multiThreadSyncContext);
-//    var multiThreadFactory = new TaskFactory(multiThreadScheduler);
+// Multithreaded scheduler and synchronization context
+var multiThreadScheduler = new DynamicThreadTaskScheduler(minThreads: 10, maxThreads: 20);
+var multiThreadSyncContext = multiThreadScheduler.CreateSynchronizationContext();
+SynchronizationContext.SetSynchronizationContext(multiThreadSyncContext);
+var multiThreadFactory = new TaskFactory(multiThreadScheduler);
 
-//for (var i = 0; i < 10; i++)
-//{
-//    // Queue tasks to multithreaded scheduler
-//    await multiThreadFactory.StartNew(() =>
-//    {
-//        Console.WriteLine("Parent task");
-//        var child = Task.Factory.StartNew(() => {
-//            Console.WriteLine("Nested task starting.");
-//        });
+for (var i = 0; i < 10; i++)
+{
+    // Queue tasks to multithreaded scheduler
+    await multiThreadFactory.StartNew(() =>
+    {
+        Console.WriteLine("Parent task");
+        var child = Task.Factory.StartNew(() =>
+        {
+            Console.WriteLine("Nested task starting.");
+        });
 
-//        Console.WriteLine(child.CreationOptions);
-//    });
+        Console.WriteLine(child.CreationOptions);
+    });
 
-//    // Post tasks to SynchronizationContext
-//    SynchronizationContext.Current!.Post(_ =>
-//    {
-//        Console.WriteLine("Task posted to SynchronizationContext executed, Thread Id: {0}", Environment.CurrentManagedThreadId);
-//    }, null);
-//}
+    // Post tasks to SynchronizationContext
+    SynchronizationContext.Current?.Post(_ =>
+    {
+        Console.WriteLine("Task posted to SynchronizationContext executed, Thread Id: {0}", Environment.CurrentManagedThreadId);
+    }, null);
+}
 
 var scheduler = new MultiThreadTaskScheduler();
 var asyncLock = new AsyncLock();
@@ -83,7 +85,7 @@ Console.WriteLine(result);
 await scheduler.QueueTask(async () =>
 {
     await scheduler.QueueTask(() => Task.Run(() => Console.WriteLine("Hello from nested task")));
-Console.WriteLine("Hello from parent task");
+    Console.WriteLine("Hello from parent task");
 });
 
-scheduler.Shutdown();
+// scheduler.Shutdown();
